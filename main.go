@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -116,8 +117,11 @@ func runDeploy() {
 		deployCancel()
 	}
 	if deployProcess != nil && deployProcess.Process != nil {
-		log.Println("Killing previous server process...")
-		deployProcess.Process.Kill()
+		log.Println("Killing previous server process group...")
+		pgid, err := syscall.Getpgid(deployProcess.Process.Pid)
+		if err == nil {
+			syscall.Kill(-pgid, syscall.SIGKILL) // Kill entire process group
+		}
 		deployProcess.Wait()
 		time.Sleep(2 * time.Second) // Wait for port to be released
 	}
@@ -141,6 +145,7 @@ func runDeploy() {
 			cmd := exec.CommandContext(deployCtx, "sh", "-c", *deployCmd)
 			cmd.Stdout = log.Writer()
 			cmd.Stderr = log.Writer()
+			cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 			mu.Lock()
 			deployProcess = cmd
