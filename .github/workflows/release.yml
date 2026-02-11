@@ -26,11 +26,19 @@ jobs:
         id: slug
         run: echo "sha8=$(echo ${GITHUB_SHA} | cut -c1-8)" >> $GITHUB_OUTPUT
 
+      - name: Delete old release
+        continue-on-error: true
+        run: |
+          gh release delete latest --yes
+          git push --delete origin latest || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: build-${{ steps.slug.outputs.sha8 }}
-          name: Build ${{ steps.slug.outputs.sha8 }}
+          tag_name: latest
+          name: Latest Build (commit ${{ steps.slug.outputs.sha8 }})
           body: |
             Automated build from commit ${{ github.sha }}
           files: gitwatcher
