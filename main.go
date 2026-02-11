@@ -20,10 +20,11 @@ var (
 var (
 	lastSHA string
 
-	mu           sync.Mutex
-	deployCtx    context.Context
-	deployCancel context.CancelFunc
-	retryDelay   = 10 * time.Second
+	mu            sync.Mutex
+	deployCtx     context.Context
+	deployCancel  context.CancelFunc
+	deployProcess *exec.Cmd
+	retryDelay    = 10 * time.Second
 )
 
 func main() {
@@ -114,6 +115,12 @@ func runDeploy() {
 		log.Println("Cancelling previous deploy...")
 		deployCancel()
 	}
+	if deployProcess != nil && deployProcess.Process != nil {
+		log.Println("Killing previous server process...")
+		deployProcess.Process.Kill()
+		deployProcess.Wait()
+		time.Sleep(2 * time.Second) // Wait for port to be released
+	}
 	deployCtx, deployCancel = context.WithCancel(context.Background())
 	mu.Unlock()
 
@@ -134,6 +141,11 @@ func runDeploy() {
 			cmd := exec.CommandContext(deployCtx, "sh", "-c", *deployCmd)
 			cmd.Stdout = log.Writer()
 			cmd.Stderr = log.Writer()
+
+			mu.Lock()
+			deployProcess = cmd
+			mu.Unlock()
+
 			if err := cmd.Run(); err != nil {
 				log.Println("deploy command failed:", err)
 				time.Sleep(retryDelay)
